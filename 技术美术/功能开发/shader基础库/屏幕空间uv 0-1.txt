@@ -1,0 +1,3 @@
+float2 screenPos = GetNormalizedScreenSpaceUV(input.positionCS);
+
+float2 screenPos = input.PositionCS / _ScaledScreenParams.xy   //是视窗的分辨率

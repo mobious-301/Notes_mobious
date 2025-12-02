@@ -1,0 +1,74 @@
+import bpy
+import os
+from pathlib import Path
+
+class AssetCatalogOrganizer:
+    def __init__(self, asset_root_folder, root_display_name):
+        self.asset_root_folder = Path(asset_root_folder)
+        self.root_display_name = root_display_name
+        self.pskx_map = self._build_pskx_map()
+    
+    def _build_pskx_map(self):
+        """构建.pskx文件路径映射表"""
+        pskx_map = {}
+        for pskx_file in self.asset_root_folder.rglob('*.pskx'):
+            try:
+                rel_path = pskx_file.relative_to(self.asset_root_folder).as_posix()
+                pskx_map[pskx_file.stem] = rel_path
+            except ValueError as e:
+                print(f"路径处理错误: {e}")
+                continue
+        return pskx_map
+    
+    def get_asset_path(self, asset):
+        """获取资产对应的路径"""
+        asset_stem = Path(asset.name).stem
+        if asset_stem not in self.pskx_map:
+            return None
+        
+        pskx_path = self.pskx_map[asset_stem]
+        return f"/{self.root_display_name}/{Path(pskx_path).parent.as_posix()}"
+    
+    def process_assets(self):
+        """处理所有资产并返回路径映射"""
+        asset_paths = {}
+        asset_types = [
+            'objects'
+        ]
+        
+        for type_name in asset_types:
+            collection = getattr(bpy.data, type_name, None)
+            if not collection:
+                continue
+            
+            for asset in collection:
+                if not getattr(asset, 'asset_data', None):
+                    continue
+                
+                asset_path = self.get_asset_path(asset)
+                if asset_path:
+                    asset_paths[asset] = asset_path
+        
+        # 刷新界面
+        for area in bpy.context.screen.areas:
+            if area.type == 'FILE_BROWSER':
+                area.tag_redraw()
+        
+        return asset_paths
+
+# 使用示例
+if __name__ == "__main__":
+    # 配置参数
+    ASSET_ROOT = "E:/八方_TGA/Game"  # 替换为你的实际路径
+    ROOT_DISPLAY_NAME = "OctopathTraveler2"
+    
+    # 创建并运行组织器
+    organizer = AssetCatalogOrganizer(ASSET_ROOT, ROOT_DISPLAY_NAME)
+    asset_paths = organizer.process_assets()
+    
+    # 打印结果
+    print("\n资产路径映射结果:")
+    for asset, path in asset_paths.items():
+        print(f"{asset.name} -> {path}")
+    
+    print(f"\n操作完成: 共处理 {len(asset_paths)} 个资产")

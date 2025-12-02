@@ -1,0 +1,83 @@
+#pragma kernel BrightnessAnalysis
+
+Texture2D<float4> _MainTex;
+float4 _MainTex_TexelSize; // Unity自动填充
+
+float4 _TextureSize;
+float _BrightnessThreshold;
+float _Probability; // 新增：控制概率的参数(0-1)
+AppendStructuredBuffer<float3> _FlareBuffer;
+
+// 简单的伪随机数生成函数
+float Random(float2 seed)
+{
+    return frac(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453);
+}
+
+
+
+// [numthreads(8, 8, 1)]
+// void BrightnessAnalysis(uint3 id : SV_DispatchThreadID)
+// {
+//     // 边界检查
+//     uint width, height;
+//     _MainTex.GetDimensions(width, height);
+//     if (id.x >= width || id.y >= height)
+//         return;
+//
+//     // 精确UV计算
+//     float2 uv = float2(
+//         (id.x + 0.5) / width,
+//         (id.y + 0.5) / height
+//     );
+//
+//     // 纹理采样
+//     float4 color = _MainTex.Load(int3(id.xy, 0));
+//     float brightness = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
+//
+//     // for (int x = 0; x < 2048; x++)
+//     // {
+//     //     _FlareBuffer.Append( float3(0.0f, 0.0f, 0.0f)) ;
+//     // }
+//
+//     // 条件写入
+//     if (brightness > _BrightnessThreshold)
+//     { 
+//
+//         _FlareBuffer.Append(float3(uv, brightness));
+//     }
+// }
+
+[numthreads(8, 8, 1)]
+void BrightnessAnalysis(uint3 id : SV_DispatchThreadID)
+{
+
+    // 1. 检查边界
+    // if (id.x >= (uint)(1/_MainTex_TexelSize.x) || id.y >= (uint)(1/_TextureSize.y))
+    //     return;
+    // float2 uv = (id.xy + 0.5) * _MainTex_TexelSize.xy;
+    float2 uv = id.xy+ 0.5;
+
+
+    
+    float4 color = _MainTex.Load(id);
+    // float brightness = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
+    float brightness = (color.x+color.y+color.z)/3.0;
+
+    // 生成基于像素位置的随机数
+    float randomValue = Random(id.xy);
+
+    // for (int x = 0; x < 2048; x++)
+    // {
+    //     _FlareBuffer.Append( float3(0.0f, 0.0f, 0.0f)) ;
+    // }
+    
+    if (brightness > 0)
+    {
+        _FlareBuffer.Append(float3(uv, brightness));
+    }
+    // else
+    // {
+    //     _FlareBuffer.Append(float3(0,0, 0));
+    // }
+}

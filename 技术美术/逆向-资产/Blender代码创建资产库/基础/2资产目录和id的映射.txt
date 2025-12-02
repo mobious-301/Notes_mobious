@@ -1,0 +1,77 @@
+import bpy
+import os
+from pathlib import Path
+
+class AssetCatalogManager:
+    def __init__(self, root_folder):
+        """
+        初始化资产目录管理器
+        :param root_folder: 包含blender_assets.cats.txt的根目录
+        """
+        self.root_folder = Path(root_folder)
+        self.cats_file = self.root_folder / "blender_assets.cats.txt"
+        self.catalog_map = self._load_catalog_ids()
+    
+    def _load_catalog_ids(self):
+        """
+        加载并解析blender_assets.cats.txt文件
+        返回目录路径到UUID的映射字典
+        """
+        catalog_map = {}
+        
+        if not self.cats_file.exists():
+            print(f"未找到blender_assets.cats.txt文件: {self.cats_file}")
+            return catalog_map
+        
+        try:
+            with open(self.cats_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    # 跳过注释和版本行
+                    if not line or line.startswith('#') or line.startswith('VERSION'):
+                        continue
+                    
+                    # 解析行内容 (格式: UUID:path:name)
+                    parts = line.split(':')
+                    if len(parts) >= 3:
+                        uuid, catalog_path, catalog_name = parts[:3]
+                        catalog_map[catalog_path] = uuid
+                        
+        except Exception as e:
+            print(f"读取分类文件失败: {str(e)}")
+        
+        return catalog_map
+    
+    def get_uuid_by_path(self, catalog_path):
+        """
+        根据目录路径获取对应的UUID
+        :param catalog_path: 资产目录路径 (如 "/Props/Furniture")
+        :return: 对应的UUID字符串，如果找不到返回None
+        """
+        # 确保路径以/开头
+        return self.catalog_map.get(catalog_path)
+    
+    def print_catalog_mapping(self):
+        """打印当前加载的分类映射"""
+        print("\n当前可用的分类映射:")
+        for path, uuid in self.catalog_map.items():
+            print(f"{path} -> {uuid}")
+        print(f"共加载 {len(self.catalog_map)} 个分类\n")
+
+# 使用示例
+if __name__ == "__main__":
+    # 1. 初始化管理器
+    catalog_manager = AssetCatalogManager("D:/Blender")
+    
+    # 2. 打印加载的分类映射
+    catalog_manager.print_catalog_mapping()
+    
+    # 3. 查询示例
+    test_paths = ["asss/a", "/Characters", "/NonExistentPath"]
+    
+    for path in test_paths:
+        uuid = catalog_manager.get_uuid_by_path(path)
+        if uuid:
+            print(f"路径 '{path}' 对应的UUID: {uuid}")
+        else:
+            print(f"未找到路径 '{path}' 对应的分类")

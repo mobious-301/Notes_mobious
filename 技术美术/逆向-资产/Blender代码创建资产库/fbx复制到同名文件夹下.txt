@@ -1,0 +1,79 @@
+import os
+import shutil
+from collections import defaultdict
+import time
+
+def build_pskx_index(search_folder):
+    """构建.pskx文件的索引字典 {文件名: [路径列表]}"""
+    pskx_index = defaultdict(list)
+    print(f"正在索引 {search_folder} 中的.pskx文件...")
+    
+    for root, _, files in os.walk(search_folder):
+        for file in files:
+            if file.lower().endswith('.pskx'):
+                pskx_index[file].append(root)
+    
+    print(f"索引完成，找到 {len(pskx_index)} 个不同的.pskx文件")
+    return pskx_index
+
+def clean_filename(filename):
+    """清理文件名，去除.fbx扩展名和可能的_mo尾缀"""
+    base_name = os.path.splitext(filename)[0]  # 去除扩展名
+    if base_name.lower().endswith('_mo'):
+        base_name = base_name[:-3]  # 去除_mo尾缀
+    return base_name
+
+def copy_fbx_to_pskx_dir(fbx_folder, search_folder):
+    """
+    将fbx_folder中的.fbx文件复制到search_folder中递归找到的同名.pskx文件所在目录
+    
+    :param fbx_folder: 存放.fbx文件的文件夹路径
+    :param search_folder: 递归搜索.pskx文件的根目录
+    """
+    # 1. 构建.pskx文件索引
+    pskx_index = build_pskx_index(search_folder)
+    
+    # 2. 处理所有.fbx文件
+    fbx_files = [f for f in os.listdir(fbx_folder) if f.lower().endswith('.fbx')]
+    total_files = len(fbx_files)
+    
+    if not fbx_files:
+        print("没有找到.fbx文件")
+        return
+    
+    print(f"找到 {total_files} 个.fbx文件，开始处理...")
+    start_time = time.time()
+    
+    for i, fbx_filename in enumerate(fbx_files, 1):
+         # 清理文件名（去除.fbx和可能的_mo）
+        base_name = clean_filename(fbx_filename)
+        pskx_filename = base_name + '.pskx'
+        
+        if pskx_filename not in pskx_index:
+            print(f"未找到匹配的.pskx文件: {pskx_filename}")
+            continue
+            
+        source_path = os.path.join(fbx_folder, fbx_filename)
+        
+        for target_dir in pskx_index[pskx_filename]:
+            target_path = os.path.join(target_dir, fbx_filename)
+            try:
+                shutil.copy2(source_path, target_path)
+                print(f"已复制: {fbx_filename} -> {target_dir}")
+            except Exception as e:
+                print(f"复制失败: {fbx_filename} 到 {target_dir}, 错误: {e}")
+        
+        # 每处理10个文件打印一次进度
+        if i % 10 == 0 or i == total_files:
+            print(f"进度: {i}/{total_files} ({i/total_files:.1%})")
+    
+    elapsed = time.time() - start_time
+    print(f"处理完成，总耗时 {elapsed:.2f} 秒")
+
+if __name__ == "__main__":
+    # 配置路径
+    fbx_folder = r"E:/OT2_TGA/fbx"  # 替换为你的.fbx文件所在文件夹
+    search_folder = r"E:/OT2_TGA/Game"  # 替换为要递归搜索的文件夹
+    
+    # 执行复制操作
+    copy_fbx_to_pskx_dir(fbx_folder, search_folder)

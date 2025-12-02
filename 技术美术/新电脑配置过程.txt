@@ -1,0 +1,9 @@
+1 svn项目下载
+个人账号TA_liaoxin
+2 UNITY 对应版本
+3 模型软件 blender 3d max
+4 xmind
+5 截取 renderdoc
+6 游戏参考  八方 ，永劫 雪地，黑猴
+7 git
+

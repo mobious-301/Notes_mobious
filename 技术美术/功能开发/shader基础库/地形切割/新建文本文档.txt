@@ -1,0 +1,109 @@
+import bpy
+import bmesh
+from mathutils import Vector
+
+def split_object_by_grid_with_copy(obj, x_spacing, y_spacing):
+    # 保存原始激活物体
+    original_active = bpy.context.active_object
+    original_mode = original_active.mode if original_active else 'OBJECT'
+    
+    # 确保在物体模式
+    bpy.ops.object.mode_set(mode='OBJECT')
+    
+    # 获取物体的边界框（世界空间）
+    bounds = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    min_x = min(v.x for v in bounds)
+    max_x = max(v.x for v in bounds)
+    min_y = min(v.y for v in bounds)
+    max_y = max(v.y for v in bounds)
+    
+    # 计算切割次数
+    x_cuts = int((max_x - min_x) / x_spacing)
+    y_cuts = int((max_y - min_y) / y_spacing)
+    
+    # 遍历所有切割区域
+    for x in range(x_cuts):
+        for y in range(y_cuts):
+            # 复制物体
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.duplicate()
+            
+            # 获取新复制的物体
+            new_obj = bpy.context.view_layer.objects.active
+            
+            # 切分边界
+            x_min = min_x + x * x_spacing
+            x_max = x_min + x_spacing
+            y_min = min_y + y * y_spacing
+            y_max = y_min + y_spacing
+            
+            # 进入编辑模式进行切割
+            bpy.ops.object.mode_set(mode='EDIT')
+            bm = bmesh.from_edit_mesh(new_obj.data)
+            
+            # 切割X方向（最小值和最大值）
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.bisect(
+                plane_co=(x_min, 0, 0),
+                plane_no=(-1, 0, 0),
+                clear_inner=False,
+                clear_outer=True
+            )
+            
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.bisect(
+                plane_co=(x_max, 0, 0),
+                plane_no=(1, 0, 0),
+                clear_inner=False,
+                clear_outer=True
+            )
+            
+            # 切割Y方向（最小值和最大值）
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.bisect(
+                plane_co=(0, y_min, 0),
+                plane_no=(0, -1, 0),
+                clear_inner=False,
+                clear_outer=True
+            )
+            
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.bisect(
+                plane_co=(0, y_max, 0),
+                plane_no=(0, 1, 0),
+                clear_inner=False,
+                clear_outer=True
+            )
+            
+            # 更新网格并退出编辑模式
+            bmesh.update_edit_mesh(new_obj.data)
+            bpy.ops.object.mode_set(mode='OBJECT')
+            
+            # 命名新切分的物体
+            new_obj.name = f"{obj.name}_part_{x}_{y}"
+            print(f"生成切分物体: {new_obj.name}")
+    
+    # 恢复原始选择和模式
+    if original_active:
+        bpy.context.view_layer.objects.active = original_active
+        if original_mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode=original_mode)
+
+def main():
+    # 获取选中的物体
+    obj = bpy.context.active_object
+    if obj is None:
+        print("请先选择一个物体")
+        return
+    
+    # 设置间距
+    x_spacing = 1.0  # X方向间距
+    y_spacing = 1.0  # Y方向间距
+    
+    split_object_by_grid_with_copy(obj, x_spacing, y_spacing)
+
+# 运行脚本
+if __name__ == "__main__":
+    main()

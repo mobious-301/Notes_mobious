@@ -1,0 +1,71 @@
+static public string GenerateClipSpacePosition(ref MasterNodeDataCollector dataCollector, int uniqueId, WirePortDataType type, bool useMasterNodeCategory = true, MasterNodePortCategory customCategory = MasterNodePortCategory.Fragment)
+{
+    // 设置精度
+    var precision = PrecisionType.Float;
+
+    // 模板着色器处理
+    // if (dataCollector.IsTemplate)
+    // {
+    //     return dataCollector.TemplateDataCollectorInstance.GetClipSpacePosition(type, precision);
+    // }
+
+    MasterNodePortCategory portCategory = useMasterNodeCategory ? dataCollector.PortCategory : customCategory;
+    string varName = (type == WirePortDataType.FLOAT3) ? "clipPos3" : "clipPos4";
+    string swizzle = (type == WirePortDataType.FLOAT3) ? ".xyz" : string.Empty;
+
+    // 顶点着色器处理
+    if (portCategory == MasterNodePortCategory.Vertex)
+    {
+        // if (!dataCollector.HasLocalVariableByName(varName, MasterNodePortCategory.Vertex))
+        // {
+        //     // SRP管线使用positionCS，传统管线使用SV_POSITION
+        //     string positionVar = dataCollector.IsSRP ? "positionCS" : "SV_POSITION";
+        //     string result = string.Format("{0}.{1}{2}", Constants.VertexShaderInputStr, positionVar, swizzle);
+        //     dataCollector.AddToVertexLocalVariables(uniqueId, precision, type, varName, result);
+        // }
+    }
+    // 片段着色器处理
+    else if (!dataCollector.HasLocalVariableByName(varName))
+    {
+        // if (dataCollector.TesselationActive)
+        // {
+        //     // 曲面细分着色器中需要特殊处理
+        //     dataCollector.AddToInput(-1, SurfaceInputs.SV_POSITION, precision);
+        //     dataCollector.AddToIncludes(uniqueId, Constants.UnityShaderVariables);
+        //
+        //     string positionCS = string.Format("{0}.{1}", Constants.InputVarStr, dataCollector.IsSRP ? "positionCS" : "SV_POSITION");
+        //     string result = positionCS + swizzle;
+        //     dataCollector.AddLocalVariable(uniqueId, precision, type, varName, result);
+        // }
+        // else
+        // {
+            // 常规处理
+            string positionCSVar = dataCollector.IsSRP ? "positionCS" : "SV_POSITION";
+            string positionCSOutput = string.Format("{0}.{1}", Constants.VertexShaderOutputStr, positionCSVar);
+            string positionCSInput = string.Format("{0}.{1}","input", positionCSVar);
+
+            // 添加输入变量
+            // dataCollector.AddToInput(uniqueId, positionCSVar, WirePortDataType.FLOAT4);
+            //
+            // // 顶点着色器阶段处理
+            // if (!dataCollector.HasLocalVariableByName(positionCSVar, MasterNodePortCategory.Vertex))
+            // {
+            //     // 计算裁剪空间位置
+            //     string vertexPos = dataCollector.IsSRP ? 
+            //         "TransformObjectToHClip(input.positionOS)" :
+            //         "UnityObjectToClipPos(input.vertex)";
+            //     
+            //     dataCollector.AddToVertexLocalVariables(uniqueId, precision, WirePortDataType.FLOAT4, positionCSVar, vertexPos);
+            // }
+            
+            // 添加顶点输出
+            // dataCollector.AddToVertexLocalVariables(uniqueId, positionCSOutput, positionCSVar);
+
+            // 片段着色器阶段处理
+            string result = positionCSInput + swizzle;
+            dataCollector.AddLocalVariable(uniqueId, precision, type, varName, result);
+        // }
+    }
+    
+    return varName;
+}

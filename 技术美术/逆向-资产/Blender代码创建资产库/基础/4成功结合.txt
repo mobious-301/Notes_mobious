@@ -1,0 +1,160 @@
+import bpy
+import os
+from pathlib import Path
+
+class AssetCatalogOrganizer:
+    def __init__(self, asset_root_folder, root_display_name):
+        self.asset_root_folder = Path(asset_root_folder)
+        self.root_display_name = root_display_name
+        self.pskx_map = self._build_pskx_map()
+    
+    def _build_pskx_map(self):
+        """构建.pskx文件路径映射表"""
+        pskx_map = {}
+        for pskx_file in self.asset_root_folder.rglob('*.pskx'):
+            try:
+                rel_path = pskx_file.relative_to(self.asset_root_folder).as_posix()
+                pskx_map[pskx_file.stem] = rel_path
+            except ValueError as e:
+                print(f"路径处理错误: {e}")
+                continue
+        return pskx_map
+    
+    def get_asset_path(self, asset):
+        """获取资产对应的路径"""
+        asset_stem = Path(asset.name).stem
+        if asset_stem not in self.pskx_map:
+            return None
+        
+        pskx_path = self.pskx_map[asset_stem]
+        return f"{self.root_display_name}/{Path(pskx_path).parent.as_posix()}"
+    
+    def process_assets(self):
+        """处理所有资产并返回路径映射"""
+        asset_paths = {}
+        asset_types = [
+            'objects'
+        ]
+        
+        for type_name in asset_types:
+            collection = getattr(bpy.data, type_name, None)
+            if not collection:
+                continue
+            
+            for asset in collection:
+                if not getattr(asset, 'asset_data', None):
+                    continue
+                
+                asset_path = self.get_asset_path(asset)
+                if asset_path:
+                    asset_paths[asset] = asset_path
+        
+        # 刷新界面
+        for area in bpy.context.screen.areas:
+            if area.type == 'FILE_BROWSER':
+                area.tag_redraw()
+        
+        return asset_paths
+
+class AssetCatalogManager:
+    def __init__(self, root_folder):
+        """
+        初始化资产目录管理器
+        :param root_folder: 包含blender_assets.cats.txt的根目录
+        """
+        self.root_folder = Path(root_folder)
+        self.cats_file = self.root_folder / "blender_assets.cats.txt"
+        self.catalog_map = self._load_catalog_ids()
+    
+    def _load_catalog_ids(self):
+        """
+        加载并解析blender_assets.cats.txt文件
+        返回目录路径到UUID的映射字典
+        """
+        catalog_map = {}
+        
+        if not self.cats_file.exists():
+            print(f"未找到blender_assets.cats.txt文件: {self.cats_file}")
+            return catalog_map
+        
+        try:
+            with open(self.cats_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    # 跳过注释和版本行
+                    if not line or line.startswith('#') or line.startswith('VERSION'):
+                        continue
+                    
+                    # 解析行内容 (格式: UUID:path:name)
+                    parts = line.split(':')
+                    if len(parts) >= 3:
+                        uuid, catalog_path, catalog_name = parts[:3]
+                        catalog_map[catalog_path] = uuid
+                        
+        except Exception as e:
+            print(f"读取分类文件失败: {str(e)}")
+        
+        return catalog_map
+    
+    def get_uuid_by_path(self, catalog_path):
+        """
+        根据目录路径获取对应的UUID
+        :param catalog_path: 资产目录路径 (如 "/Props/Furniture")
+        :return: 对应的UUID字符串，如果找不到返回None
+        """
+        # 确保路径以/开头
+        return self.catalog_map.get(catalog_path)
+    
+    def print_catalog_mapping(self):
+        """打印当前加载的分类映射"""
+        print("\n当前可用的分类映射:")
+        for path, uuid in self.catalog_map.items():
+            print(f"{path} -> {uuid}")
+        print(f"共加载 {len(self.catalog_map)} 个分类\n")
+def set_uuid(asset,uuid=""):
+    print(uuid)
+    if uuid:
+        asset.asset_data.catalog_id = uuid
+
+# 使用示例
+if __name__ == "__main__":
+    # 配置参数
+    ASSET_ROOT = "E:/八方_TGA/Game"  # 替换为你的实际路径
+    ROOT_DISPLAY_NAME = "OctopathTraveler2"
+    
+    # 创建并运行组织器
+    organizer = AssetCatalogOrganizer(ASSET_ROOT, ROOT_DISPLAY_NAME)
+    asset_paths = organizer.process_assets()
+    
+    # 打印结果
+    print("\n资产路径映射结果:")
+    for asset, path in asset_paths.items():
+        print(f"{asset.name} -> {path}")
+    
+    print(f"\n操作完成: 共处理 {len(asset_paths)} 个资产")
+    
+    
+    
+    # 1. 初始化管理器
+    catalog_manager = AssetCatalogManager("D:/Blender")
+    
+    # 2. 打印加载的分类映射
+    catalog_manager.print_catalog_mapping()
+    
+    # 3. 查询示例
+    test_paths = ["OctopathTraveler2/Character/Material", "/Characters", "/NonExistentPath"]
+    
+    for path in test_paths:
+        uuid = catalog_manager.get_uuid_by_path(path)
+        if uuid:
+            print(f"路径 '{path}' 对应的UUID: {uuid}")
+        else:
+            print(f"未找到路径 '{path}' 对应的分类")
+    
+    
+    
+    for asset, path in asset_paths.items():
+        print(path)
+        uuid = catalog_manager.get_uuid_by_path(path)
+        print(uuid)
+        set_uuid(asset,uuid)

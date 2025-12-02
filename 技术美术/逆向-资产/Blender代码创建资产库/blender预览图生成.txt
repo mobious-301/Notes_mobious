@@ -1,0 +1,73 @@
+import bpy
+import time
+from bpy.app import timers
+
+class GenerateAssetPreviewsOperator(bpy.types.Operator):
+    bl_idname = "asset.generate_previews_async"
+    bl_label = "Generate Asset Previews (Async)"
+    
+    _assets = []
+    _timer = None
+    _current_index = 0
+    
+    @classmethod
+    def poll(cls, context):
+        return True
+    
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            if self._current_index >= len(self._assets):
+                self.finish(context)
+                return {'FINISHED'}
+            
+            asset = self._assets[self._current_index]
+            try:
+                with context.temp_override(id=asset):
+                    bpy.ops.ed.lib_id_generate_preview()
+                print(f"Generated preview for: {asset.name}")
+            except Exception as e:
+                print(f"Failed to generate preview for {asset.name}: {str(e)}")
+            
+            self._current_index += 1
+            context.area.tag_redraw()
+        
+        return {'PASS_THROUGH'}
+    
+    def execute(self, context):
+        # 收集所有需要生成预览的资产
+        self._assets = []
+        for attr in dir(bpy.data):
+            if not attr.startswith('_'):
+                data_collection = getattr(bpy.data, attr, None)
+                if isinstance(data_collection, bpy.types.bpy_prop_collection):
+                    for item in data_collection:
+                        if getattr(item, 'asset_data', None):
+                            self._assets.append(item)
+        
+        if not self._assets:
+            self.report({'WARNING'}, "No assets found to generate previews")
+            return {'CANCELLED'}
+        
+        # 设置模态定时器
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.1, window=context.window)
+        wm.modal_handler_add(self)
+        
+        self.report({'INFO'}, f"Generating previews for {len(self._assets)} assets...")
+        return {'RUNNING_MODAL'}
+    
+    def finish(self, context):
+        wm = context.window_manager
+        if self._timer:
+            wm.event_timer_remove(self._timer)
+        self.report({'INFO'}, "Finished generating all previews")
+
+def register():
+    bpy.utils.register_class(GenerateAssetPreviewsOperator)
+
+def unregister():
+    bpy.utils.unregister_class(GenerateAssetPreviewsOperator)
+
+if __name__ == "__main__":
+    register()
+    bpy.ops.asset.generate_previews_async()

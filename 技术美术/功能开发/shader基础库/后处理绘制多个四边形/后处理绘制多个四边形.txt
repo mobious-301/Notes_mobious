@@ -1,0 +1,31 @@
+cmd.DrawProcedural(Matrix4x4.identity, bloomMaterial, 1, MeshTopology.Quads, 4, 1, null);
+unity 中 通过 id控制顶点位置 以正方形为标准  4:1  四个
+
+cmd.DrawProcedural()这是一个Unity中CommandBuffer的方法,用于进行Procedural绘制。与常规的cmd.DrawMesh()不同,这种方式不需要预先准备Mesh数据,而是由Shader自己计算顶点位置和属性。
+Matrix4x4.identity
+
+这是一个4x4的单位矩阵,表示没有任何变换。这个参数用于指定绘制时的世界空间变换矩阵。
+
+bloomMaterial
+
+这是一个Material对象,它包含了用于绘制的Shader和相关的属性值。在这个例子中,它可能是一个用于bloom后处理效果的Material。
+
+1
+
+这是Shader属性块的索引。如果Shader中有多个属性块,可以使用这个参数来指定要使用哪一个。通常情况下,这个值为0。
+
+MeshTopology.Quads
+
+这个参数指定了绘制时使用的Mesh拓扑类型。在本例中,它使用了四边形拓扑(MeshTopology.Quads)。这种拓扑类型通常用于一些特殊的渲染需求,如粒子系统、体积雾等。
+
+4
+
+这个参数指定了一次绘制的顶点数量。在四边形拓扑中,4个顶点定义一个四边形。所以这里绘制了4个顶点,也就是一个四边形。
+
+1
+
+这个参数指定了要绘制的四边形的数量。在本例中,只绘制了1个四边形。
+
+null
+
+这个参数是一个顶点属性数组。通常情况下,在使用Procedural绘制时,Shader会根据自身的逻辑计算顶点属性,所以这里传递的是null。但如果需要传递一些额外的顶点数据,可以在这里传递一个数组。

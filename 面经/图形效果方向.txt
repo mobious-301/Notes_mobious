@@ -1,0 +1,73 @@
+1.物理正确的SSR为什么会产生噪点，如何减少采样保持不错的效果？
+
+  产生噪点是因为采样方向是又蒙特卡洛随机抽样导致。
+  可以通过HiZ渐进式的StepSize实现低采样得到不错的效果。
+
+
+2.TAA的意义是什么，要如何实现时间采样点，如何处理闪烁？
+
+  TAA的意义是超级采样。对ProjectionMatrix进行低差异序列抖动来实现时间域上的采样点。可以在构建Color ClampBoundBox的时候做一个九宫格过滤，以及根据前后帧的位置差和速度来决定当前混合历史样本的强度去减少闪烁。
+
+
+3.SSSSProfile的含义是什么，怎么做到高性能，以及如何避免其他物体被SSSS处理？
+
+  SSSSProfile的含义是用多个高斯来模拟光线的扩散程度，为什么用高斯因为方便而且具有线性样本复杂度。可以通过分离ColorBuffer成DiffuseBuffer和SpecularBuffer，然后单独对Diffuse做Donwsample再对其进行SSSS处理得到的结果Upsample到全分辨率混合SpecularBuffer做到高性能，也可以在采样的时候加入随机范围的Radius实现少采样好效果。避免其他物体被SSS处理可以使用Stencil来隔开物体Draw和SSSBuffer。
+
+
+4.GTAO的方法以及为什么要叫GT？
+
+  方法是将屏幕空间DepthBuffer作为高度场然后每个像素简历一个半球空间对其进行均匀切分(1或者4都可以)，然后每个切分的扇叶往视角RayMarch，PerStep采样深度比较结果来计算是不是被遮挡，最后累加每个扇叶的结果求平均即可。至于为什么叫GT可能是因为作者考虑了CosineWeight更符合漫反射分布形态也可能是作者和RT的结果对比发现差不多就臭不要脸了吧。
+
+
+5.PreintegratedSkin是如何实现Skin效果的以及和崩坏的Ramp有啥区别？
+
+  吧SSSProfile用UV.XY来作为分布强度输入得到一张SSSLUT(因为是PreBake所以Color被固定了)，然后物体使用NoL和Curvature(描述物体表面区域曲率强度)作为UV来采样图即可。然后使用Shadow的Float值和一个用户可控FLoat值来组合成UV采样得到阴影的SSS效果。和Ramp有啥区别的话后者其实为了风格化做出了一些trick上的改进不一定基于物理，而且后者因为是NPR所以Y的采样一般是暴露给美术去控制的而不是用Curvature，可以叫MaskMap。
+
+
+6.Froxel如何实现大气散射的？
+
+  基本可以分为两步数据收集阶段和累加积分阶段。第一个阶段会构建一个3DTexture然后遍历整个LightStruct去写入LightColor到每个Cell，遍历计算颜色的时候可以加上Mie和Rayleigh的散射公式实现光对雾的散射效果，同时也可以带入当前UVW采样LightShadow得到Occlusion。第二个阶段会对之前计算好颜色的3DTexture带入Frustum从Near往Far进行March累加每一层的ScatterColor(March累加可以使用寒霜的物理累加公式)。
+
+
+7.IBL现阶段的好处和缺陷以及如何考虑一些能量守恒的问题？
+
+  现阶段IBL的标准方案是UE4提出的SplitSumApprox，该方法吧入射光和GGXPDF都预积分了，入射光变成了GGXFilter的Cubemap，GGXPDF变成了一张2DLUT。好处就是这样能把消耗降低到只是采样贴图上，缺点就是因为预计算所以无法做到带入V向量这里只能强制V=N了导致V始终都是垂直的向量，最后的结果就是采样出来的图失去了GGX特有的拉斯反射效果(在与视角几乎平行的金属平面上尤为明显)。而且该方法因为没有考虑多重散射会导致金属度高粗糙度高的情况下材质效果偏黑，解决方法可以对2DLUT进行改造实现多散射以维护不同粗糙度的能量分布。
+
+
+8.分享一下自己认为的Post流程已经为什么这样设计？
+
+  SSAO->SSGI->SSR->Bloom->Tonemap->ColorGradient->MotionBlur->DoF。SSAO可以使用AO来驱动IndirectDispatch减低SSGI的开销，同时得到的效果拿来采样SSR得到反射里面带AO和GI，Bloom需要检测亮度范围所以在Tone之前，ColorGrident和MB和DoF都不需要HDRImage所以可以放Tone后做UBer。
+
+
+9.几何求交怎么算，软光栅怎么实现？
+  求交算法不记得了，软光栅就是点转换到屏幕空间坐标然后Bershanme组装图元结合扫描线实现光栅像素。
+
+
+10.旋转矩阵满足什么条件？
+
+  保持距离，一个向量乘以旋转矩阵后长度不会变。保持角度，多个向量乘以这个矩阵后他们之间的相对关系还是不会变的比如他们之间的角度不会改变。
+
+
+11.自己在实现渲染管线的时候遇到最大的问题是什么？
+
+ RenderPatch和LightingPatch的择优处理。对于LightingPatch，因为Froxel和透明的关系最终还是舍弃Tile模式而转为Cluster方法了。对于RenderPatch，因为GBuffer无法支撑太多ShadingParameter还是走了ForwardPlus配一个ThinGBuffer。前者可以无限制ShaderParameter，后者可以做到兼容后续的各自ScreenEffects。
+
+
+12.如何优化一些渲染性能？
+
+  对于制作层制定好相应的规范，比如单个元素的模型的材质尽量使用一个靠MaterialID去在DCC软件里面画好区域贴图减少SubMaterial的开销，其次就是做好MeshLOD和ShaderLOD以减轻远处的顶点和像素开销，大场景做好区域的HLOD。功能层对RenderContext如MeshRender，可以提前按多级类型Cache好比如按照Shader再到Mesh，尽可能减少PSOSet和DrawCall即可。再就是渲染特效比如SSR等可以在半分辨率进行再Up到全分辨率。又或者动态阴影可以分为两个BufferList一个Dynamic一个Static来减轻动态阴影的开销。
+
+
+13.为什么使用ReverseZ。以及怎么解决一些Z-Fighting？
+
+  因为Float越接近0精度越高，Depth光栅因为GPU差值又不是线性的导致远处的精度不够会出现Z-Fighting，这个使用反向一下Z存储让远处为0精度分配高一些吧这个分布抵消掉从而得到近处远处精度都够的效果。如果还有Z-Fighting那只能竟可能的吧NearClip放远了让精度更多的平坦到FarClip去。
+
+
+14.图形管线的基本变换流程。以及NDC之前的空间范围是多少？以及怎么解释齐次坐标？
+
+  Object->World->View->HClip->NDC-Screen。NDC是0-1根据API不同可能是-1-1所以它在/W前的范围是0-W或者-1-W。齐次坐标是为了解决三维矩阵不能平移的方案，对于方向向量W分量给0即可消除平移影响。
+
+
+15.Mobile上为什么不使用Deferred，深层原因是什么？
+
+  Mobile的GPU架构是TileCache的所以需要避免从VRAM里取数据到Cache的过程，而DeferredShading需要的GBuffer则是需要频繁Cache和VRAM交换数据的操作。

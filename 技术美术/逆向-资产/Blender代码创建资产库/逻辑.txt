@@ -1,0 +1,2 @@
+everything 单拉pskx出来
+用 导入pskx 脚本设置材质

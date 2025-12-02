@@ -1,0 +1,51 @@
+import bpy
+import os
+from pathlib import Path
+
+
+def assign_assets_by_pskx(root_folder):
+
+    
+    # 2. 处理所有资产（兼容新旧版本）
+    processed = 0
+    asset_types = [
+        'objects'
+    ]
+    
+    print("============== collection =======================")
+    for type_name in asset_types:
+        collection = getattr(bpy.data, type_name, None)
+        #print(collection)
+        
+        for i, (name, path) in enumerate(collection.items()):
+            if i >= 3:
+                print("...")
+                break
+            print(f"{name} -> {path}")
+        if not collection:
+            continue
+        
+        for asset in collection:
+            #print(str(Path(pskx_path).parent.as_posix()))
+            # 从文件路径提取目录结构（去掉文件名）
+            print(asset)
+            # 确保目录存在
+            category = "0ae259c5-8c38-4957-92c9-09b7e8faf944"
+            asset.asset_data.catalog_id = category
+
+            processed += 1
+    
+    # 刷新界面
+    for area in bpy.context.screen.areas:
+        if area.type == 'FILE_BROWSER':
+            area.tag_redraw()
+    
+    print(f"\n操作完成: 共处理 {processed} 个资产")
+
+# 使用示例
+if __name__ == "__main__":
+    # 设置你的.pskx文件所在根目录
+    ASSET_ROOT = "E:/八方_TGA/Game"  # 替换为你的实际路径
+    
+    # 执行分配
+    assign_assets_by_pskx(ASSET_ROOT)

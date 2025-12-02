@@ -1,0 +1,7 @@
+// o.uvMainAndLM.zw = v.texcoord * unity_LightmapST.xy + unity_LightmapST.zw;
+    //
+    // o.uvMainAndLM.zw = v.staticLightmapUV;
+    OUTPUT_LIGHTMAP_UV(v.staticLightmapUV, unity_LightmapST, o.uvMainAndLM.zw);
+
+编辑模式采样 uv0
+运行模式采样 uv1

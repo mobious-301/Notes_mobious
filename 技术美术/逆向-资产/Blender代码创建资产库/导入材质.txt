@@ -1,0 +1,156 @@
+import bpy
+import os
+from pathlib import Path
+
+def find_file_in_subfolders(root_folder, filename):
+    """在子文件夹中递归查找文件"""
+    for root, dirs, files in os.walk(root_folder):
+        if filename in files:
+            return os.path.join(root, filename)
+    return None
+
+def load_texture(root_folder, image_name, color_space='sRGB'):
+    """加载或获取已存在的纹理，在子文件夹中搜索"""
+    # 尝试不同扩展名
+    base_name = Path(image_name).stem
+    for ext in ['.tga', '.png', '.jpg', '.hdr', '.exr']:
+        found_path = find_file_in_subfolders(root_folder, f"{base_name}{ext}")
+        if found_path:
+            # 检查是否已加载（使用完整路径作为键）
+            image = next((img for img in bpy.data.images if img.filepath == found_path), None)
+            if image is None:
+                try:
+                    image = bpy.data.images.load(found_path)
+                    # 设置色彩空间
+                    image.colorspace_settings.name = color_space
+                    return image
+                except Exception as e:
+                    print(f"Failed to load image {found_path}: {str(e)}")
+                    continue
+            else:
+                # 确保色彩空间设置正确
+                image.colorspace_settings.name = color_space
+                return image
+    
+    print(f"Texture not found: {image_name} in {root_folder}")
+    return None
+
+def setup_material_from_mat_file(material, root_folder, mat_name):
+    """根据.mat文件设置材质，在子文件夹中搜索"""
+    mat_file_path = find_file_in_subfolders(root_folder, f"{mat_name}.mat")
+    if not mat_file_path:
+        print(f".mat file not found for: {mat_name}")
+        return
+    
+    # 读取.mat文件内容
+    with open(mat_file_path, 'r') as f:
+        mat_data = f.readlines()
+    
+    # 解析.mat文件
+    texture_mappings = {}
+    other_textures = []  # 存储Other纹理
+    for line in mat_data:
+        line = line.strip()
+        if line.startswith('Diffuse='):
+            texture_mappings['Diffuse'] = line.split('=', 1)[1].strip()
+        elif line.startswith('Normal='):
+            texture_mappings['Normal'] = line.split('=', 1)[1].strip()
+        elif line.startswith('Other['):
+            other_textures.append(line.split('=', 1)[1].strip())
+    
+    # 确保使用节点
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    
+    # 清空现有节点 (但保留输出节点)
+    output_node = None
+    for node in nodes:
+        if node.type == 'OUTPUT_MATERIAL':
+            output_node = node
+        else:
+            nodes.remove(node)
+    
+    # 如果没有输出节点则创建一个
+    if not output_node:
+        output_node = nodes.new('ShaderNodeOutputMaterial')
+    
+    # 创建必要的节点
+    bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+    links.new(bsdf.outputs['BSDF'], output_node.inputs['Surface'])
+    
+        
+    # 设置粗糙度为1
+    bsdf.inputs['Roughness'].default_value = 1.0
+    
+    
+    # 节点布局参数
+    column_width = 300
+    row_height = 300
+    current_x = -500
+    current_y = 300
+
+    # 处理Diffuse贴图
+    if 'Diffuse' in texture_mappings:
+        tex_name = texture_mappings['Diffuse']
+        image = load_texture(root_folder, tex_name, 'sRGB')
+        if image:
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.image = image
+            tex_node.location = (current_x, current_y)
+            links.new(tex_node.outputs['Color'], bsdf.inputs['Base Color'])
+            current_y -= row_height
+
+    # 处理Normal贴图
+    if 'Normal' in texture_mappings:
+        tex_name = texture_mappings['Normal']
+        image = load_texture(root_folder, tex_name, 'Non-Color')
+        if image:
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.image = image
+            tex_node.image.colorspace_settings.name = 'Non-Color'
+            tex_node.location = (current_x, current_y)
+            
+            normal_node = nodes.new('ShaderNodeNormalMap')
+            normal_node.inputs['Strength'].default_value = -1.0
+            normal_node.location = (current_x + column_width, current_y)
+            
+            links.new(tex_node.outputs['Color'], normal_node.inputs['Color'])
+            links.new(normal_node.outputs['Normal'], bsdf.inputs['Normal'])
+            current_y -= row_height
+
+            
+    # 处理Other贴图 - 只添加不连接
+    x_pos = -1200
+    y_pos = -300
+    for i, tex_name in enumerate(other_textures):
+        image = load_texture(root_folder, tex_name, 'Non-Color' if '_no' in tex_name else 'sRGB')
+        if image:
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.image = image
+            tex_node.image.colorspace_settings.name = 'Non-Color' if '_no' in tex_name else 'sRGB'
+            tex_node.location = (x_pos, y_pos)
+            tex_node.label = f"Other[{i}]"
+            # 不连接任何节点，只保留在材质中
+            y_pos -= 300
+            if y_pos < -1500:  # 每列最多放5个节点
+                y_pos = -300
+                x_pos -= 300
+
+def process_scene_materials(root_folder):
+    """处理场景中所有物体的材质"""
+    # 先确保所有材质都使用节点
+    for mat in bpy.data.materials:
+        mat.use_nodes = True
+    
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH':
+            for slot in obj.material_slots:
+                if slot.material:
+                    mat_name = slot.material.name
+                    print(f"Processing material: {mat_name}")
+                    setup_material_from_mat_file(slot.material, root_folder, mat_name)
+
+# 使用示例
+texture_folder = "E:/八方_TGA/Game"  # 替换为你的纹理根文件夹路径
+process_scene_materials(texture_folder)
